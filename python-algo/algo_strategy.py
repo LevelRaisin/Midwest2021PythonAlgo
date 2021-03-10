@@ -56,7 +56,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         gamelib.debug_write('Performing turn {} of your custom algo strategy'.format(game_state.turn_number))
         game_state.suppress_warnings(True)  #Comment or remove this line to enable warnings.
 
-        self.starter_strategy(game_state)
+        #self.starter_strategy(game_state)
+        self.strategy_v1(game_state)
 
         game_state.submit_turn()
 
@@ -65,6 +66,60 @@ class AlgoStrategy(gamelib.AlgoCore):
     NOTE: All the methods after this point are part of the sample starter-algo
     strategy and can safely be replaced for your custom algo.
     """
+
+    def strategy_v1(self, game_state):
+        """
+        Defense:
+        """
+
+        self.build_defenses_v1(game_state)
+        if game_state.turn_number < 4:
+            game_state.attempt_spawn(INTERCEPTOR, [[2, 11], [20, 6]], 2)  # interceptor stalling while base is built
+        else:
+            mp_available = game_state.get_resource(MP)
+            #game_state.attempt_spawn(INTERCEPTOR, [[23, 9], [16, 2]], 1)
+            if (mp_available > 12 and game_state.turn_number < 30) or (mp_available > 16):
+                game_state.attempt_spawn(SCOUT, [13, 0], math.floor(mp_available * 0.25))
+                game_state.attempt_spawn(SCOUT, [11, 2], math.floor(mp_available * 0.75))
+
+    def build_defenses_v1(self, game_state):
+        # TODO: replace turrets + walls every turn
+
+        supp_pts = [[14, 3], [13, 2], [19, 8], [20, 9], [19, 9], [18, 7], [17, 6], [16, 5], [15, 4]]
+        supp_stages = [0, 0, 2, len(supp_pts)]
+        supp_upgr_stages = [2, 2, 2, len(supp_pts)]
+
+        turret_pts = [[3, 13], [24, 13], [1, 12], [2, 12], [2, 13], [21, 10], [25, 13], [3, 12], [20, 11], [22, 13],
+                      [4, 13], [3, 11], [23, 12], [19, 10], [19, 11], [20, 10], [4, 12], [24, 12]]
+        turret_stages = [2, 3, 5, len(turret_pts)]
+        turret_upgr_stages = turret_stages
+
+        wall_pts = [[13, 3], [14, 2], [26, 12], [27, 13], [0, 13], [1, 13], [15, 3], [16, 4], [17, 5], [18, 6],
+                       [12, 3], [11, 3], [10, 3], [9, 4], [8, 5], [7, 6], [6, 7], [5, 8], [4, 9], [3, 10], [2, 11],
+                    [19, 7], [20, 8], [21, 9], [22, 12], [23, 11], [26, 13], [25, 12], [19, 12], [21, 13]]
+        wall_upgr_pts = [[0, 13], [1, 13], [27, 13], [26, 13], [26, 12], [1, 12], [25, 12], [21, 13], [22, 12],
+                         [19, 12]]  # order for upgrading walls
+        wall_stages = [2, 24, len(wall_pts), len(wall_pts)]
+        wall_upgr_stages = [0, 4, 4, len(wall_upgr_pts)]
+
+        if game_state.turn_number == 1:
+            game_state.attempt_spawn(TURRET, turret_pts[:2])
+            game_state.attempt_upgrade(turret_pts[:2])
+
+        for i in range(4):  # go through building stages
+            game_state.attempt_spawn(WALL, wall_pts[:wall_stages[i]])
+            game_state.attempt_spawn(TURRET, turret_pts[:turret_stages[i]])
+
+            game_state.attempt_upgrade(turret_pts[:turret_upgr_stages[i]])
+            wall_pts_to_up = wall_upgr_pts[:wall_upgr_stages[i]]
+            if len(wall_pts_to_up) > 0:
+                game_state.attempt_upgrade(wall_pts_to_up)
+
+            supp_pts_to_spawn = supp_pts[:supp_stages[i]]
+            if len(supp_pts_to_spawn) > 0:
+                game_state.attempt_spawn(SUPPORT, supp_pts[:supp_stages[i]])
+
+            game_state.attempt_upgrade(supp_pts[:supp_upgr_stages[i]])
 
     def starter_strategy(self, game_state):
         """
@@ -136,7 +191,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         Send out interceptors at random locations to defend our base from enemy moving units.
         """
         # We can spawn moving units on our edges so a list of all our edge locations
-        friendly_edges = game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_LEFT) + game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_RIGHT)
+        friendly_edges = game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_LEFT) + \
+                         game_state.game_map.get_edge_locations(game_state.game_map.BOTTOM_RIGHT)
         
         # Remove locations that are blocked by our own structures 
         # since we can't deploy units there.
