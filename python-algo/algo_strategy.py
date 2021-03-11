@@ -78,7 +78,6 @@ class AlgoStrategy(gamelib.AlgoCore):
         else:
             return point
 
-
     def strategy_v1(self, game_state):
         """
         Defense:
