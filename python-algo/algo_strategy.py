@@ -43,6 +43,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         SP = 0
         # This is a good place to do initial setup
         self.invert = False # whether we are inverted or not
+        self.dem_attack = False  # whether to prepare for a demolisher + wall attack
         self.scored_on_locations = []
 
 
@@ -77,6 +78,19 @@ class AlgoStrategy(gamelib.AlgoCore):
             return [27 - point[0], point[1]]
         else:
             return point
+
+    def get_normalized_points(self, locations):
+        """
+        Takes in list of points
+        Returns list of normalized points
+        """
+        temp = locations
+        if self.invert:
+            for i in range(len(locations)):
+                temp[i] = self.get_normalized_point(locations[i])
+            return temp
+        else:
+            return locations
 
     def strategy_v1(self, game_state):
         """
