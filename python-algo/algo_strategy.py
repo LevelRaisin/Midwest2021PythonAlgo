@@ -42,7 +42,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         MP = 1
         SP = 0
         # This is a good place to do initial setup
+        self.invert = False # whether we are inverted or not
         self.scored_on_locations = []
+
 
     def on_turn(self, turn_state):
         """
@@ -67,10 +69,21 @@ class AlgoStrategy(gamelib.AlgoCore):
     strategy and can safely be replaced for your custom algo.
     """
 
+    def get_normalized_point(self, point):
+        """
+        Returns point if not self.invert and inverted point if self.invert
+        """
+        if self.invert:
+            return [27 - point[0], point[1]]
+        else:
+            return point
+
+
     def strategy_v1(self, game_state):
         """
         Defense:
         """
+        self.get_normalized_point([3,4])
 
         self.build_defenses_v1(game_state)
         if game_state.turn_number < 4:
