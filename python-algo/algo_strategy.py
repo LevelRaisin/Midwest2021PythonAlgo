@@ -279,6 +279,45 @@ class AlgoStrategy(gamelib.AlgoCore):
             if not game_state.contains_stationary_unit(location):
                 filtered.append(location)
         return filtered
+        
+    def reflect(self, game_state):
+        ref = {}
+        old = []
+        new = [0,0]
+        
+
+        for location in game_state.game_map:
+
+            old.append[location]
+
+            unit = game_state.contains_stationary_unit(location)
+
+            new = location
+            if new[0]  < 13.5:
+                new[0] = new[0] + ((13.5 - (new[0]))*2)
+            else: 
+                new[0] = new[0] - ((13.5 - (new[0]))*2)
+
+            ref[new] = unit.unit_type
+
+        for location in old:
+            if location in ref.keys():
+                old.remove(location)
+            
+        for location in old:
+            game_state.attempt_remove(location)
+
+        return ref
+
+    def reflect_2(self, game_state, ref){
+
+        for location in ref.keys():
+            game_state.attempt_spawn(ref(location), location)
+        
+    }
+
+
+            
 
     def on_action_frame(self, turn_string):
         """
