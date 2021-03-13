@@ -53,6 +53,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         # This is a good place to do initial setup
         self.invert = False # whether we are inverted or not
         self.scored_on_locations = []
+        self.dem_attack_stage = 0
 
 
     def on_turn(self, turn_state):
@@ -92,11 +93,8 @@ class AlgoStrategy(gamelib.AlgoCore):
         Takes in list of points
         Returns list of normalized points
         """
-        temp = locations
         if self.invert:
-            for i in range(len(locations)):
-                temp[i] = self.get_normalized_point(locations[i])
-            return temp
+            return list(map(self.get_normalized_point, locations))
         else:
             return locations
 
@@ -116,15 +114,18 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         # check if they have a vulnerable line in the front
         enemy_front_vul_y = self.enemy_front_vulnerable(game_state)
-        gamelib.debug_write("Front enemy y loc attack: {}".format(enemy_front_vul_y))
-        if enemy_front_vul_y != -1 and mp_available >= 12 and self.total_structures(game_state) > 25:
+        #gamelib.debug_write("Front enemy y loc attack: {}".format(enemy_front_vul_y))
+        if enemy_front_vul_y != -1 and game_state.project_future_MP() >= 9 and self.total_structures(game_state) > 25:  # if they are
+            # vulnerable, we have enough MP, and we have a decent amount of SP from refunds
             self.dem_attack_stage = 1
 
+        #  this chunk of code tells the algo to deploy interceptors right after an attack if they have a lot of MP
         deploy_int = False
         if enemy_mp >= 9 and self.dem_attack_stage == 3:
             deploy_int = True
             self.dem_attack_stage = 0
 
+        #  deals with control flow of a demolisher line attack
         if self.dem_attack_stage == 0:
             self.build_defenses_v1(game_state, deploy_int)
         elif self.dem_attack_stage == 1:
@@ -135,10 +136,8 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         if game_state.turn_number < 4:
             game_state.attempt_spawn(INTERCEPTOR, self.get_normalized_points([[6, 7], [20, 6]]), 2)  # interceptor stalling while base is built
-        #elif self.enemy_front_vulnerable(game_state) and mp_available >= 12 and self.structures_intact_v1(game_state, weak_dem_walls_needed):
-            #gamelib.debug_write("Weak demolisher attack.")
-            #game_state.attempt_spawn(DEMOLISHER, self.get_normalized_point([15, 1]), 10000)
-        elif enemy_mp >= 9 and self.dem_attack_stage < 2:  # send interceptor for defense while rebuilding
+        elif enemy_mp >= 9 and self.dem_attack_stage == 0:  # send interceptor for defense while rebuilding
+            # send interceptors when enemy has at least 9 MP... can be optimized
             if not self.structures_intact_v1(game_state, full_v):
                 if enemy_mp < 12:
                     game_state.attempt_spawn(INTERCEPTOR, [20, 6], 1)
@@ -153,8 +152,9 @@ class AlgoStrategy(gamelib.AlgoCore):
                 else:
                     game_state.attempt_spawn(INTERCEPTOR, [20, 6], 2)
                     game_state.attempt_spawn(INTERCEPTOR, [6, 7], 2)
-        elif enemy_mp >= 6 and self.dem_attack_stage < 2 and not game_state.contains_stationary_unit([6, 7]):
+        elif enemy_mp >= 6 and self.dem_attack_stage < 2 and not game_state.contains_stationary_unit([6, 7]):  # send out interceptor if we have a hole in the V
             game_state.attempt_spawn(INTERCEPTOR, [6, 7], 1)
+
         if ((mp_available >= 12 and game_state.turn_number < 30) or (mp_available >= 22 and game_state.turn_number > 50)
             or (mp_available > 16 and 50 >= game_state.turn_number >= 30)) and self.dem_attack_stage == 0:  # scout attack (not during demolisher attack prep)
             if game_state.turn_number > 70 and random.randint(1, 4) == 3:
@@ -163,7 +163,7 @@ class AlgoStrategy(gamelib.AlgoCore):
                 game_state.attempt_spawn(SCOUT, [13, 0], math.floor(mp_available * 0.25))
                 game_state.attempt_spawn(SCOUT, [11, 2], math.floor(mp_available * 0.75))
 
-    def total_structures(self, game_state):
+    def total_structures(self, game_state):  # returns total amount of structures we have (not the SP refund)
         total_num = 0
         for location in game_state.game_map:
             if location[1] <= 13:
@@ -171,13 +171,13 @@ class AlgoStrategy(gamelib.AlgoCore):
                     total_num += 1
         return total_num
 
-    def structures_intact_v1(self, game_state, locations):
+    def structures_intact_v1(self, game_state, locations):  # checks if all locations are intact
         for location in locations:
             if not game_state.contains_stationary_unit(location):  # if the loc does not contain a building
                 return False  # then we do not have our whole structure intact -> missing piece
         return True
 
-    def demolisher_stage1_v1(self, game_state):
+    def demolisher_stage1_v1(self, game_state):  # removes all our defenses and spawns a few interceptors
         gamelib.debug_write("Demolisher stage 1.")
         for location in game_state.game_map:
             if location[1] <= 13:
@@ -188,7 +188,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         game_state.attempt_spawn(INTERCEPTOR, [14, 0], 1)
         game_state.attempt_spawn(INTERCEPTOR, [21, 7], 1)
 
-    def demolisher_stage2_v1(self, game_state, enemy_y):
+    def demolisher_stage2_v1(self, game_state, enemy_y):  # builds the line of walls + supports and deploys demolishers
         gamelib.debug_write("Demolisher stage 2.")
 
         if game_state.get_resource(SP) > 20:  # we need enough SP to build a semi-respectable wall
@@ -205,10 +205,8 @@ class AlgoStrategy(gamelib.AlgoCore):
             gamelib.debug_write("Aborting demolisher stage 2: Insufficient SP")
         self.dem_attack_stage += 1
 
-    def enemy_front_vulnerable(self, game_state):
-        """
-        :return: True if the enemy is vulnerable to a demolisher + wall attack
-        """
+    def enemy_front_vulnerable(self, game_state):  # returns y position of their strongest horiz line of defenses
+        # (only closest 3 y's considered)
         num_turrets = 0
         num_upgr_turr = 0
         num_struct = 0
@@ -225,7 +223,7 @@ class AlgoStrategy(gamelib.AlgoCore):
                                 num_upgr_turr += 1
                     num_struct += 1
             if num_turrets > 7:
-                if num_upgr_turr <= 2:  # basically the upgraded turrets demolish the demolishers if they are stacked
+                if num_upgr_turr <= 1:  # basically the upgraded turrets demolish the demolishers if they are stacked
                     most_turrets_y = y
             num_turrets = 0
             if num_struct > 22:
@@ -238,7 +236,6 @@ class AlgoStrategy(gamelib.AlgoCore):
             return most_struct_y
         else:
             return -1
-
 
     def build_defenses_v1(self, game_state, deploy_int):
         # TODO: replace turrets + walls every turn
@@ -266,28 +263,27 @@ class AlgoStrategy(gamelib.AlgoCore):
         wall_upgr_stages = [4, 4, 4, len(wall_upgr_pts)]
 
         # [TYPE, point[2], upgrade] - Default not upgraded
-        build_order = [mkT(3,13, True), mkT(24, 13, True), mkT(3,11), mkT(21,10), # Main turrets
+        build_order_V = [mkT(3,13, True), mkT(24, 13, True), mkT(1,12), mkT(21,10), # Main turrets
                         mkW(10,3), mkW(9,4), mkW(8,5), mkW(7,6), mkW(6,7), mkW(5,8), # Thin Wall (Most)
                         mkW(11,3), mkW(12,3), mkW(13,3), # Horizontal bottom
                         mkW(14, 2), mkW(15,3), mkW(16,4), mkW(17,5), mkW(18,6), mkW(19,7), mkW(20,8), mkW(21,9), #Thick Wall
-                        mkT(23,12), mkT(20,11), # Thick Corner Reinforcement
-                        mkW(4,9), mkW(3,10), mkW(2,11), # Thin Wall (Rest)
-                        mkT(2,12), mkT(4,12), # Thin Corner Turret Reinforcement
-                        mkS(20,9, True), mkS(19,8, True), # First Support
-                        mkW(0,13), mkT(1,12), # Thin Corner completion
-                        mkT(25,13), mkW(26,12), mkW(27,13), # Thick Corner completion
+                        mkT(23,12), mkT(25, 13), mkW(26, 12), mkW(27, 13), mkW(0, 13), mkW(4,9),
+                        mkW(3,10), mkW(2,11), mkT(4,12), mkT(20,11), # Thick Corner Reinforcement
+                        mkT(2,12), mkT(3, 11),  # Thin Corner completion
+                        mkS(20,9, True), mkS(19,8, True),  # First Support
                         mkT(19,11), mkW(19,12), mkT(22,13), mkW(21,13), mkW(22,12), mkT(20,10), mkW(23,11), # Thick Corner Full Fortification 1
                         mkW(1,13), mkW(26,13), mkW(0,13, True), mkW(27,13, True), # Wall Upgrade 1
                         mkT(4,13), mkT(3,12), mkT(2,13), # Thin Corner Full Fortification
                         mkW(26,13, True), mkW(1,13, True), # Wall Upgrade 2
                         mkT(21,10), mkT(24,12), # Thick Corner Full Fortification 2
-                        mkS(19,9), mkS(18,7), mkS(17,6), mkS(16,5), mkS(15,4), mkS(14,3), mkS(13,2), # Rest Support
+                        mkS(19,9), mkS(18,7), mkS(17,6), mkS(16,5), mkS(15,4), mkS(14,3), mkS(13,2)  # Rest Support
                         ]
+
         # Removed completely: Wall@[25,12],
         # Not upgraded: Wall@[[0,13], [1,13], [27,13], [26,13], [26,12], [1,12], [25,12], [21,13], [22,12], [19,12]]
         # Not upgraded: All turrets
 
-        for struct in build_order:
+        for struct in build_order_V:
             loc = self.get_normalized_point(struct[1])
             game_state.attempt_spawn(struct[0], loc)
             if (struct[2]):
