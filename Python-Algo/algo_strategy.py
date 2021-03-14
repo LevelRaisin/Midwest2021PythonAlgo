@@ -57,6 +57,39 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.stick_attack_stage = 0
         self.corner_attack_stage = 0
 
+        self.attack = False  # whether we are attacking or not
+        self.repl = []  # Which tiles got replaced
+
+        self.rightT = [mkT(24, 12), mkT(21, 10), mkT(20, 10)]
+        self.rightTU = [mkT(s[1][0], s[1][1], True) for s in self.rightT]
+        self.base_v = [mkW(0, 13), mkW(1, 13), mkT(2, 12), mkW(2, 11), mkW(3, 10), mkW(4, 9), mkW(5, 8), mkW(6, 7),
+                       mkW(7, 6), mkW(8, 5), mkW(9, 4), mkW(10, 3)] + (
+                              self.rightT + [mkW(11, 3), mkW(12, 3), mkW(13, 3), ])
+
+        self.diag = [[21, 9], [20, 8], [19, 7], [18, 6], [17, 5], [16, 4], [15, 3], [14, 2]]
+        self.diagW = [mkW(p[0], p[1]) for p in self.diag]  # list(map(lambda p : mkW(p[0], p[1]), self.diag))
+        self.diagS = [mkS(p[0], p[1]) for p in self.diag]  # list(map(lambda p : mkW(p[0], p[1]), self.diag))
+
+        self.wall_v = [
+            [mkW(27, 13), mkW(26, 13), mkW(25, 13), mkW(24, 13), mkW(20, 11)],  # Thick
+            [mkW(2, 13), mkW(3, 13), mkW(4, 13), ]  # Thin
+        ]
+        self.wall_vU = [
+            [mkW(s[1][0], s[1][1], True) for s in self.wall_v[0]],
+            [mkW(s[1][0], s[1][1], True) for s in self.wall_v[1]]
+        ]
+
+        self.reinf = [
+            [mkT(23, 12), mkT(23, 11), mkW(22, 13)],  # Thick
+            [mkT(3, 12), mkT(3, 11)]  # Thin
+        ]
+        self.reinfU = [
+            [mkT(s[1][0], s[1][1], True) for s in self.reinf[0]],
+            [mkT(s[1][0], s[1][1], True) for s in self.reinf[1]]
+        ]
+
+        self.extra = [mkT(21, 11, True), mkT(23, 13, True), mkT(4, 12, True), mkT(4, 11, True),
+                      mkT(24, 11, True), mkT(19, 11, True), mkT(1, 12, True)]
 
     def on_turn(self, turn_state):
         """
@@ -100,6 +133,10 @@ class AlgoStrategy(gamelib.AlgoCore):
         else:
             return locations
 
+    def sell_diag(self, game_state):
+        if self.repl:
+            game_state.attempt_remove(self.repl)
+
     def strategy_v1(self, game_state):
         """
         Defense:
@@ -116,8 +153,8 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         # check if they have a vulnerable line in the front
         enemy_front_vul_y = self.enemy_front_vulnerable(game_state)
-        if enemy_front_vul_y != -1 and game_state.project_future_MP() >= 9 and self.total_structures(game_state) > 25 \
-            and self.stick_attack_stage == 0:  # if they are
+        if False and enemy_front_vul_y != -1 and game_state.project_future_MP() >= 9 and self.total_structures(game_state) > 25 \
+            and self.stick_attack_stage == 0 and self.corner_attack_stage == 0:  # if they are
             # vulnerable, we have enough MP, and we have a decent amount of SP from refunds
             self.dem_attack_stage = 1
 
@@ -131,10 +168,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         #  check if we should run the stick strat
         future_MP = game_state.project_future_MP()
         if self.total_structures(game_state) > 25 and self.dem_attack_stage == 0 and \
-                game_state.project_future_MP(player_index=1) <= 10:  # and potentially another condition
-            if future_MP > 15 and game_state.turn_number < 25:
-                self.stick_attack_stage = 1
-            elif future_MP >= 21 and game_state.turn_number <= 35:
+                game_state.project_future_MP(player_index=1) <= 20 and \
+                game_state.my_health > game_state.project_future_MP(player_index=1) + 1:  # and potentially another condition
+            if future_MP >= 21 and game_state.turn_number <= 35:
                 self.stick_attack_stage = 1
             elif future_MP >= 25 and game_state.turn_number <= 50:
                 self.stick_attack_stage = 1
@@ -169,36 +205,35 @@ class AlgoStrategy(gamelib.AlgoCore):
             else:
                 self.corner_attack_stage = 0
 
-
         if self.dem_attack_stage == 0 and self.stick_attack_stage == 0 and self.corner_attack_stage == 0:
             self.build_defenses_v1(game_state)
 
         if game_state.turn_number < 4:
             game_state.attempt_spawn(INTERCEPTOR, self.get_normalized_points([[6, 7], [20, 6]]), 2)  # interceptor stalling while base is built
-        elif enemy_mp >= 9 and self.dem_attack_stage == 0 and self.stick_attack_stage == 0 and self.corner_attack_stage == 0:  # send interceptor for defense while rebuilding
-            # send interceptors when enemy has at least 9 MP... can be optimized
-            if not self.structures_intact_v1(game_state, full_v):
-                if enemy_mp < 12:
-                    if game_state.turn_number < 40:
-                        game_state.attempt_spawn(INTERCEPTOR, [20, 6], 1)
-                elif enemy_mp >= 20 and game_state.turn_number > 40:
-                    game_state.attempt_spawn(INTERCEPTOR, [20, 6], 3)
-                elif enemy_mp >= 30:
-                    game_state.attempt_spawn(INTERCEPTOR, [20, 6], 6)
-                else:
-                    game_state.attempt_spawn(INTERCEPTOR, [20, 6], 1)
-            else:
-                if enemy_mp < 12:
-                    game_state.attempt_spawn(INTERCEPTOR, [21, 7], 2)
-                    game_state.attempt_spawn(INTERCEPTOR, [15, 1], 1)
-                else:
-                    game_state.attempt_spawn(INTERCEPTOR, [20, 6], 2)
-                    game_state.attempt_spawn(INTERCEPTOR, [6, 7], 2)
-        elif enemy_mp >= 6 and self.dem_attack_stage < 2 and not game_state.contains_stationary_unit([6, 7]):  # send out interceptor if we have a hole in the V
-            game_state.attempt_spawn(INTERCEPTOR, [6, 7], 1)
+        # elif enemy_mp >= 9 and self.dem_attack_stage == 0 and self.stick_attack_stage == 0 and self.corner_attack_stage == 0:  # send interceptor for defense while rebuilding
+        #     # send interceptors when enemy has at least 9 MP... can be optimized
+        #     if not self.structures_intact_v1(game_state, full_v):
+        #         if enemy_mp < 12:
+        #             if game_state.turn_number < 40:
+        #                 game_state.attempt_spawn(INTERCEPTOR, [20, 6], 1)
+        #         elif enemy_mp >= 20 and game_state.turn_number > 40:
+        #             game_state.attempt_spawn(INTERCEPTOR, [20, 6], 3)
+        #         elif enemy_mp >= 30:
+        #             game_state.attempt_spawn(INTERCEPTOR, [20, 6], 6)
+        #         else:
+        #             game_state.attempt_spawn(INTERCEPTOR, [20, 6], 1)
+        #     else:
+        #         if enemy_mp < 12:
+        #             game_state.attempt_spawn(INTERCEPTOR, [21, 7], 2)
+        #             game_state.attempt_spawn(INTERCEPTOR, [15, 1], 1)
+        #         else:
+        #             game_state.attempt_spawn(INTERCEPTOR, [20, 6], 2)
+        #             game_state.attempt_spawn(INTERCEPTOR, [6, 7], 2)
+        # elif enemy_mp >= 6 and self.dem_attack_stage < 2 and not game_state.contains_stationary_unit([6, 7]):  # send out interceptor if we have a hole in the V
+        #     game_state.attempt_spawn(INTERCEPTOR, [6, 7], 1)
 
-        if ((mp_available >= 15 and game_state.turn_number < 25) or (mp_available >= 25 and game_state.turn_number > 50)
-            or (mp_available > 25 and 50 >= game_state.turn_number >= 30)) and self.dem_attack_stage == 0 and \
+        if ((mp_available >= 20 and game_state.turn_number < 25) or (mp_available >= 25 and game_state.turn_number > 50)
+            or (mp_available > 30 and 50 >= game_state.turn_number >= 30)) and self.dem_attack_stage == 0 and \
                 self.stick_attack_stage == 0 and self.corner_attack_stage == 0:  # scout attack (not during demolisher/stick prep)
             game_state.attempt_spawn(SCOUT, [13, 0], math.floor(mp_available * 0.25))
             game_state.attempt_spawn(SCOUT, [11, 2], math.floor(mp_available * 0.75))
@@ -214,6 +249,34 @@ class AlgoStrategy(gamelib.AlgoCore):
             self.stick_attack_stage = 0
         if self.corner_attack_stage == 3:
             self.corner_attack_stage = 0
+
+    def strategy_v2(self, game_state):
+        # Defense
+        self.build_defenses_v1(game_state)
+
+        # Offense
+        mp_available = game_state.get_resource(MP)
+        if (game_state.turn_number <= 4):
+            game_state.attempt_spawn(INTERCEPTOR, self.get_normalized_points([[2, 11], [20, 6]]), 1)
+        elif (self.attack):
+            if random.getrandbits(1):
+                game_state.attempt_spawn(SCOUT, self.get_normalized_point([13, 0]), math.floor(mp_available))
+            else:
+                game_state.attempt_spawn(DEMOLISHER, self.get_normalized_point([13, 0]), math.floor(mp_available))
+            self.attack = False
+            self.sell_diag(game_state)
+        elif ((mp_available > 15 and game_state.turn_number < 30) or (mp_available > 21)):
+            self.attack = True
+            self.repl = []
+            sp = game_state.get_resource(SP)
+            for d in self.diag:
+                if sp > 3:
+                    self.repl.append(d)
+                    sp = sp - 3
+                else:
+                    break
+            if self.repl:
+                self.sell_diag(game_state)
 
     def total_structures(self, game_state):  # returns total amount of structures we have (not the SP refund)
         total_num = 0
@@ -339,6 +402,40 @@ class AlgoStrategy(gamelib.AlgoCore):
         else:
             return -1
 
+    def build_defenses_v2(self, game_state):
+        # TODO: replace turrets + walls every turn
+        # TODO: upgrade or add second layer of support
+
+        build_order = self.base_v + (
+                        self.wall_v[0] + self.wall_v[1] + self.reinf[0] + self.reinf[1] + (
+                        self.rightTU + self.reinfU[0] + self.reinfU[1] + self.wall_vU[0] + self.wall_vU[1]
+                        ))
+
+        if game_state.turn_number > 30:
+            build_order += self.extra
+
+        if self.attack:
+            build_order = self.diagS + build_order
+        else:
+            build_order = self.diagW + build_order
+
+        # [TYPE, point[2], upgrade]
+        for struct in build_order:
+            loc = self.get_normalized_point(struct[1])
+            game_state.attempt_spawn(struct[0], loc)
+            if (struct[2]):
+                game_state.attempt_upgrade(loc)
+
+        if self.attack and self.repl:
+            for p in self.repl:
+                if p[1] >= 7:
+                    game_state.attempt_upgrade(self.get_normalized_point(p))
+                else:
+                    loc = [p[0] - 1, p[1]]
+                    nloc = self.get_normalized_point(loc)
+                    game_state.attempt_spawn(nloc)
+                    game_state.attempt_remove(nloc)
+
     def build_defenses_v1(self, game_state):
         # TODO: replace turrets + walls every turn
         # TODO: upgrade or add second layer of support
@@ -380,11 +477,43 @@ class AlgoStrategy(gamelib.AlgoCore):
                         mkT(21,10, True), mkT(24,12, True), mkT(25,13, True), mkT(20,11, True), # Thick Corner Full Fortification 2
                         mkS(19,9), mkS(18,7), mkS(17,6), mkS(16,5), mkS(15,4), mkS(14,3), mkS(13,2),
                         mkT(22,3, True), mkT(19, 11, True), mkT(20, 10, True),
-                        mkS(19,9, True), mkS(18,7, True), mkS(17,6, True), mkS(16,5, True), mkS(15,4, True),
-                        mkS(14,3, True), mkS(13,2, True), mkT(1,12, True), mkT(2,12, True), mkT(3,12, True),
+                        mkS(19,9, True), mkS(18,7, True), mkT(1,12, True), mkT(2,12, True), mkT(3,12, True),
                         mkT(4, 12, True), mkT(2,13, True), mkT(4,13, True), mkT(3,11, True), mkT(22,13, True),
-                        mkT(23, 12, True), mkT(19,10, True)
+                        mkT(23, 12, True), mkT(19,10, True), mkS(17,6, True), mkS(16,5, True), mkS(15,4, True),
+                        mkS(14,3, True), mkS(13,2, True)
                         ]
+
+        build_order_V = [mkT(3,12, True), mkT(20, 11, True), mkT(1,12), mkT(21,10), # Main turrets
+                mkW(10,3), mkW(9,4), mkW(8,5), mkW(7,6), mkW(6,7), mkW(5,8), # Thin Wall (Most)
+                mkW(11,3), mkW(12,3), mkW(13,3), # Horizontal bottom
+                mkW(14, 2), mkW(15,3), mkW(16,4), mkW(17,5), mkW(18,6), mkW(19,7), mkW(20,8), mkW(24,12), #Thick Wall
+                mkT(25, 12), mkT(26, 12), mkW(27, 13), mkW(0, 13), mkW(4,9),
+                mkW(3,10), mkW(2,11), mkT(4,12), mkT(22,11), # Thick Corner Reinforcement
+                mkT(2,12), mkT(3, 11), mkW(26,13),mkW(23,11) , mkT(21, 11, True),  # Thin Corner completion
+                mkT(3,12,True), mkW(3,13), mkT(19, 9), mkS(19,8, True),  # First Support
+                mkT(18,10), mkT(19,12), mkW(22,12),mkW(21,12), # Thick Corner Full Fortification 1
+                 mkW(1,13), mkW(0,13, True), mkW(27,13, True), # Wall Upgrade 1
+                mkW(4,13), mkW(2,13), mkT(17,11), mkT(17,10),mkT(22,10), mkT(23,10), mkT(24,10),
+                mkW(16,11),mkW(16,10),mkW(17,9),# Thin Corner Full Fortification
+                mkW(26,13, True), mkW(1,13, True), mkW(22,12, True),mkW(21,12, True), mkW(23,11, True),# Wall Upgrade 2
+                mkW(3,13,True), mkT(19, 9, True), mkT(17,11, True), mkT(18,10, True),
+                mkT(21,10, True), mkW(24,12, True), mkW(25,13, True), mkT(22,11, True), # Thick Corner Full Fortification 2
+                mkS(18,7), mkS(17,6), mkS(16,5), mkS(15,4), mkS(14,3), mkS(13,2),
+                mkT(19, 12, True), mkT(26, 12, True),mkW(16,11,True),mkW(16,10,True),mkW(17,9,True),
+                mkS(18,7, True), mkT(1,12, True), mkT(2,12, True),
+                mkT(4, 12, True), mkW(2,13, True), mkW(4,13, True), mkT(3,11, True), mkT(20,12, True),
+                mkT(24, 11, True), mkT(18,9, True), mkS(17,6, True), mkS(16,5, True), mkS(15,4, True),
+                mkS(14,3, True), mkS(13,2, True),mkT(22,10, True), mkT(23,10, True), mkT(24,10, True)
+                ]
+
+
+        supp_points = [[19, 8], [18, 7], [17, 6], [16, 5], [15, 4], [14, 3], [13, 2]]
+        turret_points = [[2, 13], [3, 13], [4, 13], [2, 12], [3, 12], [4, 12], [19, 12], [20, 12], [3, 11],
+                                  [4, 11], [17, 11], [20, 11], [21, 11], [22, 11], [4, 10], [17, 10], [18, 10],
+                                  [21, 10], [22, 10], [18, 9], [19, 9]]
+        wall_points = [[0, 13], [1, 13], [25, 13], [26, 13], [27, 13], [1, 12], [21, 12], [22, 12], [24, 12],
+                               [2, 11], [23, 11], [3, 10], [4, 9], [5, 8], [20, 8], [6, 7], [19, 7], [7, 6], [18, 6],
+                               [8, 5], [17, 5], [9, 4], [16, 4], [10, 3], [11, 3], [12, 3], [13, 3], [15, 3], [14, 2]]
 
         # Removed completely: Wall@[25,12],
         # Not upgraded: Wall@[[0,13], [1,13], [27,13], [26,13], [26,12], [1,12], [25,12], [21,13], [22,12], [19,12]]
