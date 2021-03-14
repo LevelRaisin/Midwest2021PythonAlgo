@@ -68,7 +68,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         self.diagS = [mkS(p[0],p[1]) for p in self.diag] # list(map(lambda p : mkW(p[0], p[1]), self.diag))
 
         self.wall_v = [
-                        [mkW(27,13), mkW(26,13), mkW(25,13), mkW(24,13), mkW(20,11)], # Thick
+                        [mkW(27,13), mkW(26,13), mkW(25,13), mkW(24,13), mkW(20,12)], # Thick
                         [mkW(2,13), mkW(3,13), mkW(4,13),] # Thin
                         ]
         self.wall_vU = [
@@ -86,7 +86,9 @@ class AlgoStrategy(gamelib.AlgoCore):
                         ]
 
         self.extra = [mkT(21,11, True), mkT(23,13, True), mkT(4,12, True), mkT(4,11, True),
-                        mkT(24,11, True), mkT(19,11, True), mkT(1,12, True)]
+                        mkT(24,11, True), mkT(19,11, True), mkT(1,12, True), mkT(20,11, True),
+                        mkT(19,11, True), mkT(23,10, True), mkT(23,9, True), mkT(24,10, True),
+                        mkT(20,9, True)]
         self.sell_extra = [s[1] for s in self.extra]
 
 
@@ -153,9 +155,9 @@ class AlgoStrategy(gamelib.AlgoCore):
             game_state.attempt_spawn(INTERCEPTOR, self.get_normalized_point([2,11]), 1)
         if (game_state.turn_number <= 10):
             game_state.attempt_spawn(DEMOLISHER, self.get_normalized_point([20, 6]), 1)
-            """elif (not self.attack and random.random() < 0.1):
+        elif (False):
             self.refing = True
-            self.refres = self.reflect(game_state)"""
+            self.refres = self.reflect(game_state)
         elif (self.attack):
             if random.getrandbits(1):
                 game_state.attempt_spawn(SCOUT, self.get_normalized_point([13, 0]), math.floor(mp_available))
@@ -175,6 +177,7 @@ class AlgoStrategy(gamelib.AlgoCore):
                     break
             if self.repl:
                 self.sell_diag(game_state)
+            game_state.attempt_remove(self.sell_extra)
 
 
 
