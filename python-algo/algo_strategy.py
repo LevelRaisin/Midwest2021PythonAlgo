@@ -134,7 +134,7 @@ class AlgoStrategy(gamelib.AlgoCore):
 
     def sell_diag(self, game_state):
         if self.repl:
-            game_state.attempt_remove(self.repl)
+            game_state.attempt_remove(self.get_normalized_point(self.repl))
 
     def strategy_v1(self, game_state):
         # Defense
@@ -142,8 +142,10 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         # Offense
         mp_available = game_state.get_resource(MP)
-        if (game_state.turn_number <= 4):
-            game_state.attempt_spawn(INTERCEPTOR, self.get_normalized_points([[2, 11], [20, 6]]), 1)
+        if (game_state.turn_number < 4):
+            game_state.attempt_spawn(INTERCEPTOR, self.get_normalized_point([2,11]), 1)
+        if (game_state.turn_number <= 10):
+            game_state.attempt_spawn(DEMOLISHER, self.get_normalized_point([20, 6]), 1)
         elif (self.attack):
             if random.getrandbits(1):
                 game_state.attempt_spawn(SCOUT, self.get_normalized_point([13, 0]), math.floor(mp_available))
@@ -173,10 +175,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         build_order = self.base_v + (
                         self.wall_v[0] + self.wall_v[1] + self.reinf[0] + self.reinf[1] + (
                         self.rightTU + self.reinfU[0] + self.reinfU[1] + self.wall_vU[0] + self.wall_vU[1]
-                        ))
-
-        if game_state.turn_number > 30:
-            build_order += self.extra
+                        )) + self.extra
 
         if self.attack:
             build_order = self.diagS + build_order
@@ -190,15 +189,26 @@ class AlgoStrategy(gamelib.AlgoCore):
             if (struct[2]):
                 game_state.attempt_upgrade(loc)
 
-        if self.attack and self.repl:
-            for p in self.repl:
-                if p[1] >= 7:
-                    game_state.attempt_upgrade(self.get_normalized_point(p))
-                else:
-                    loc = [p[0] - 1, p[1]]
+        if self.attack:
+            shift = -1
+            while True:
+                shift = shift + 1
+                succ = 0
+                for p in self.diag:
+                    loc = [p[0] - shift, p[1]]
+                    if p[1] < 7:
+                        loc[0] = loc[0] - 1
+
                     nloc = self.get_normalized_point(loc)
-                    game_state.attempt_spawn(nloc)
-                    game_state.attempt_remove(nloc)
+                    succ = game_state.attempt_spawn(SUPPORT, nloc)
+                    if succ:
+                        game_state.attempt_remove(nloc)
+                    if p[1] >= 7:
+                        succ = game_state.attempt_upgrade(nloc)
+                    if not succ:
+                        break
+                if not succ:
+                    break
 
 
     def on_action_frame(self, turn_string):
