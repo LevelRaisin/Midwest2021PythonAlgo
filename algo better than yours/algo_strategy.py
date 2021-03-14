@@ -153,7 +153,7 @@ class AlgoStrategy(gamelib.AlgoCore):
         mp_available = game_state.get_resource(MP)
         if (game_state.turn_number < 4):
             game_state.attempt_spawn(INTERCEPTOR, self.get_normalized_point([2,11]), 1)
-        if (game_state.turn_number <= 20):
+        if (game_state.turn_number <= 20 and (game_state.turn_number <= 10 or game_state.turn_number%2)):
             game_state.attempt_spawn(DEMOLISHER, self.get_normalized_point([20, 6]), math.floor(mp_available))
         elif (False):
             self.refing = True
@@ -199,14 +199,14 @@ class AlgoStrategy(gamelib.AlgoCore):
         else:
             build_order = self.diagW + build_order + self.extra
 
+        self.fix_front_row(game_state)
+
         # [TYPE, point[2], upgrade]
         for struct in build_order:
             loc = self.get_normalized_point(struct[1])
             game_state.attempt_spawn(struct[0], loc)
             if (struct[2]):
                 game_state.attempt_upgrade(loc)
-
-        self.fix_front_row(game_state)
 
         if self.attack:
             if self.repl:
