@@ -54,7 +54,9 @@ class AlgoStrategy(gamelib.AlgoCore):
         # This is a good place to do initial setup
         self.invert = False # whether we are inverted or not
         self.attack = False # whether we are attacking or not
+        self.refing = False # whether we are reflecting or not
         self.repl = [] # Which tiles got replaced
+        self.refres = {}
 
         self.rightT = [mkT(24,12), mkT(21, 10), mkT(20, 10)]
         self.rightTU = [mkT(s[1][0],s[1][1], True) for s in self.rightT]
@@ -85,6 +87,7 @@ class AlgoStrategy(gamelib.AlgoCore):
 
         self.extra = [mkT(21,11, True), mkT(23,13, True), mkT(4,12, True), mkT(4,11, True),
                         mkT(24,11, True), mkT(19,11, True), mkT(1,12, True)]
+        self.sell_extra = [s[1] for s in self.extra]
 
 
     def on_turn(self, turn_state):
@@ -134,10 +137,14 @@ class AlgoStrategy(gamelib.AlgoCore):
 
     def sell_diag(self, game_state):
         if self.repl:
-            game_state.attempt_remove(self.get_normalized_point(self.repl))
+            game_state.attempt_remove(self.get_normalized_points(self.repl))
 
     def strategy_v1(self, game_state):
         # Defense
+        if (self.refing):
+            self.reflect_2(game_state, self.refres)
+            self.invert = not self.invert
+            self.refing = False
         self.build_defenses_v1(game_state)
 
         # Offense
@@ -146,6 +153,9 @@ class AlgoStrategy(gamelib.AlgoCore):
             game_state.attempt_spawn(INTERCEPTOR, self.get_normalized_point([2,11]), 1)
         if (game_state.turn_number <= 10):
             game_state.attempt_spawn(DEMOLISHER, self.get_normalized_point([20, 6]), 1)
+            """elif (not self.attack and random.random() < 0.1):
+            self.refing = True
+            self.refres = self.reflect(game_state)"""
         elif (self.attack):
             if random.getrandbits(1):
                 game_state.attempt_spawn(SCOUT, self.get_normalized_point([13, 0]), math.floor(mp_available))
@@ -220,6 +230,40 @@ class AlgoStrategy(gamelib.AlgoCore):
         """
         # Let's record at what position we get scored on
         #state = json.loads(turn_string)
+
+    def reflect(self, game_state):
+        ref = {}
+        old = []
+
+        for location in game_state.game_map:
+            if location[1] > 13:
+                continue
+
+            unit = game_state.contains_stationary_unit(location)
+            if not unit:
+                continue
+
+            old.append(location)
+
+            new = [27-location[0],location[1]]
+
+            ref[tuple(new)] = unit
+
+        for location in old:
+            tloc = tuple(location)
+            if tloc in ref.keys() and ref[tloc].unit_type == game_state.contains_stationary_unit(location).unit_type:
+                old.remove(location)
+
+        game_state.attempt_remove(old)
+
+        return ref
+
+    def reflect_2(self, game_state, ref):
+        for location in ref.keys():
+            unit = ref[location]
+            game_state.attempt_spawn(unit.unit_type, location)
+            if unit.upgraded:
+                game_state.attempt_upgrade(location)
 
 
 if __name__ == "__main__":
